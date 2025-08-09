@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:smart_pad_app/services/api_service.dart';
 
 // UserRole enum은 login_screen.dart와 중복되므로,
 // 나중에 별도의 파일(예: lib/models/user_model.dart)로 옮기는 것이 좋습니다.
@@ -42,31 +43,41 @@ class _SignupScreenState extends State<SignupScreen> {
     super.dispose();
   }
 
-  void _signup() {
+// signup_screen.dart 의 _signup() 함수
+  void _signup() async {
     if (_formKey.currentState!.validate()) {
-      // TODO: 여기에 Spring 백엔드로 회원가입 요청을 보내는 API 호출 코드를 작성합니다.
-      print('회원가입 시도:');
-      print('역할: ${_selectedRole.name}');
-      print('아이디: ${_usernameController.text}');
-      print('비밀번호: ${_passwordController.text}');
-      print('이름: ${_nameController.text}');
+      Map<String, dynamic> userData = {
+        'username': _usernameController.text,
+        'password': _passwordController.text,
+        'name': _nameController.text,
+        'role': _selectedRole.name.toUpperCase(),
+      };
 
-      if (_selectedRole == UserRole.patient) {
-        print('체중: ${_weightController.text}');
-        print('나이: ${_ageController.text}');
-        print('감각인지: $_sensoryPerception');
-        print('활동량: $_activityLevel');
-        print('운동량: $_movementLevel');
+      try {
+        await ApiService.signup(userData);
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('회원가입이 완료되었습니다. 로그인해주세요.')),
+        );
+        Navigator.of(context).pop();
+
+      } catch (e) {
+        // --- ▼▼▼ 바로 이 부분입니다! ▼▼▼ ---
+        print('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
+        print('회원가입 실패! Flutter 앱에서 발생한 에러:');
+        print(e); // 에러 객체 전체를 출력하여 자세한 정보 확인
+        print('🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥🔥');
+
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('회원가입 실패: ${e.toString().replaceFirst("Exception: ", "")}')),
+        );
       }
-
-      // 회원가입 성공 후 로그인 화면으로 이동하라는 메시지 표시
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('회원가입이 완료되었습니다. 로그인해주세요.')),
-      );
-      // 현재 화면을 닫고 이전 화면(로그인/시작)으로 돌아감
-      Navigator.of(context).pop();
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -126,32 +137,74 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  // signup_screen.dart 파일의 다른 부분은 그대로 두고,
+// _buildBasicInfoSection 함수만 아래 내용으로 교체하세요.
+
   Widget _buildBasicInfoSection() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('기본 정보', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
         const SizedBox(height: 16),
+
+        // --- 아이디(username) 입력 필드 ---
         TextFormField(
           controller: _usernameController,
-          decoration: const InputDecoration(labelText: '아이디', border: OutlineInputBorder()),
-          validator: (value) => value!.trim().isEmpty ? '아이디를 입력해주세요.' : null,
+          decoration: const InputDecoration(
+            labelText: '아이디',
+            border: OutlineInputBorder(),
+            counterText: "", // 글자 수 카운터 숨기기
+          ),
+          maxLength: 12, // 입력 가능한 최대 글자 수 제한
+          validator: (value) {
+            // 1. 입력값이 없는지 확인
+            if (value == null || value.trim().isEmpty) {
+              return '아이디를 입력해주세요.';
+            }
+            // 2. 최대 길이를 초과했는지 확인 (maxLength가 시각적으로 제한해주지만, 한번 더 검사)
+            if (value.length > 12) {
+              return '아이디는 12글자 이하로 입력해주세요.';
+            }
+            // 3. 모든 검사를 통과하면 null을 반환하여 유효하다고 알림
+            return null;
+          },
         ),
         const SizedBox(height: 16),
+
+        // --- 비밀번호(password) 입력 필드 ---
         TextFormField(
           controller: _passwordController,
-          obscureText: !_isPasswordVisible,
+          obscureText: !_isPasswordVisible, // 비밀번호 가리기
           decoration: InputDecoration(
             labelText: '비밀번호',
             border: const OutlineInputBorder(),
+            counterText: "",
             suffixIcon: IconButton(
               icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
               onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
             ),
           ),
-          validator: (value) => value!.isEmpty ? '비밀번호를 입력해주세요.' : null,
+          maxLength: 12,
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return '비밀번호를 입력해주세요.';
+            }
+            if (value.length > 12) {
+              return '비밀번호는 12글자 이하로 입력해주세요.';
+            }
+            // 4. 정규 표현식(RegExp)을 사용하여 복잡한 규칙 검사
+            //    - (?=.*[A-Za-z]): 최소 한 개의 영문자가 포함되어야 함
+            //    - (?=.*\d): 최소 한 개의 숫자가 포함되어야 함
+            RegExp passwordRegExp = RegExp(r'^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{1,12}$');
+            if (!passwordRegExp.hasMatch(value)) {
+              return '비밀번호는 영어, 숫자를 혼용해야 합니다.';
+            }
+            return null;
+          },
         ),
         const SizedBox(height: 16),
+
+        // --- 비밀번호 확인 입력 필드 ---
         TextFormField(
           controller: _confirmPasswordController,
           obscureText: !_isConfirmPasswordVisible,
@@ -164,20 +217,33 @@ class _SignupScreenState extends State<SignupScreen> {
             ),
           ),
           validator: (value) {
-            if (value!.isEmpty) return '비밀번호를 다시 한번 입력해주세요.';
-            if (value != _passwordController.text) return '비밀번호가 일치하지 않습니다.';
+            if (value == null || value.isEmpty) {
+              return '비밀번호를 다시 한번 입력해주세요.';
+            }
+            // 5. 비밀번호 입력 필드의 값과 일치하는지 확인
+            if (value != _passwordController.text) {
+              return '비밀번호가 일치하지 않습니다.';
+            }
             return null;
           },
         ),
         const SizedBox(height: 16),
+
+        // --- 이름(name) 입력 필드 ---
         TextFormField(
           controller: _nameController,
           decoration: const InputDecoration(labelText: '이름', border: OutlineInputBorder()),
-          validator: (value) => value!.trim().isEmpty ? '이름을 입력해주세요.' : null,
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return '이름을 입력해주세요.';
+            }
+            return null;
+          },
         ),
       ],
     );
   }
+
 
   Widget _buildPatientDetailSection() {
     // 드롭다운 메뉴 아이템 리스트

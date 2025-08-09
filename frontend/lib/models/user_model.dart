@@ -20,7 +20,9 @@ class UserModel {
       id: json['id'],
       username: json['username'],
       name: json['name'],
-      role: json['role'] == 'patient' ? UserRole.patient : UserRole.admin,
+      role: (json['role'] as String).toLowerCase() == 'patient'
+          ? UserRole.patient
+          : UserRole.admin,
     );
   }
 }
