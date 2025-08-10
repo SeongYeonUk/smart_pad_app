@@ -1,4 +1,4 @@
-package com.example.frontend
+package com.example.smart_pad_app
 
 import io.flutter.embedding.android.FlutterActivity
 

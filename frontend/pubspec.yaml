@@ -36,6 +36,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   http: ^1.2.1
   flutter_secure_storage: ^9.0.0 # 이 줄 추가
+  flutter_blue_plus: ^1.31.14
+  permission_handler: ^11.3.1 # 이 줄 추가
 
 dev_dependencies:
   flutter_test:

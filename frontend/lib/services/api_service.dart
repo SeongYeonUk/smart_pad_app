@@ -4,7 +4,7 @@ import 'package:smart_pad_app/models/user_model.dart';
 
 class ApiService {
   // ❗️ 실제 기기에서 테스트 시, ipconfig로 찾은 PC의 IPv4 주소를 사용해야 합니다.
-  static const String _baseUrl = 'http://192.168.0.108:8080';
+  static const String _baseUrl = 'http://10.210.98.125:8080';
   // ❗️ 에뮬레이터에서 테스트 시에는 'http://10.0.2.2:8080'를 사용하세요.
 
   // --- 회원가입 API 호출 함수 ---

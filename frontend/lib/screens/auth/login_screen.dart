@@ -1,6 +1,6 @@
-import 'dart:convert'; // jsonEncode를 사용하기 위해 import 합니다.
+import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart'; // Secure Storage를 사용하기 위해 import 합니다.
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:provider/provider.dart';
 import 'package:smart_pad_app/providers/auth_provider.dart';
 import 'package:smart_pad_app/models/user_model.dart';
@@ -20,6 +20,27 @@ class _LoginScreenState extends State<LoginScreen> {
   UserRole _selectedRole = UserRole.patient;
   bool _isPasswordVisible = false;
 
+  // 아이디 기억하기 관련 변수
+  bool _rememberUsername = false;
+  final _storage = const FlutterSecureStorage();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRememberedUsername(); // 화면 시작 시 저장된 아이디 불러오기
+  }
+
+  // 기기에 저장된 아이디를 불러와 입력창에 채우는 함수
+  Future<void> _loadRememberedUsername() async {
+    final rememberedUsername = await _storage.read(key: 'rememberedUsername');
+    if (rememberedUsername != null) {
+      setState(() {
+        _usernameController.text = rememberedUsername;
+        _rememberUsername = true;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _usernameController.dispose();
@@ -27,63 +48,72 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  // 로그인 함수는 BuildContext를 인자로 받습니다.
+  // 로그인 로직 전체
   void _login(BuildContext context) async {
+    print("--- 1. 로그인 버튼 눌림 ---");
     if (_formKey.currentState!.validate()) {
+      print("--- 2. 유효성 검사 통과 ---");
       final username = _usernameController.text;
       final password = _passwordController.text;
 
       try {
-        // 1. ApiService를 통해 실제 로그인 요청을 보냅니다.
+        print("--- 3. ApiService.login 호출 시도 ---");
+
+        // 아이디 기억하기 체크박스 상태에 따라 아이디를 저장하거나 삭제
+        if (_rememberUsername) {
+          await _storage.write(key: 'rememberedUsername', value: username);
+        } else {
+          await _storage.delete(key: 'rememberedUsername');
+        }
+
+        // 실제 로그인 API 호출
         final responseData = await ApiService.login(username, password);
 
-        // --- ▼▼▼ [핵심] 로그인 정보 영구 저장 로직 추가 ▼▼▼ ---
+        print("--- 4. ApiService.login 호출 성공! ---");
+        print("   - 서버 응답: $responseData");
 
-        // 2. 기기에 데이터를 안전하게 저장하기 위한 storage 인스턴스를 생성합니다.
-        const storage = FlutterSecureStorage();
-
-        // 3. 서버가 보내준 사용자 정보 Map('user' 키 아래의 값)을 JSON 형태의 문자열로 변환합니다.
+        // 자동 로그인을 위해 사용자 정보 전체를 기기에 저장
         final userJson = jsonEncode(responseData['user']);
+        await _storage.write(key: 'loggedInUser', value: userJson);
 
-        // 4. 'loggedInUser' 라는 키(key)로 변환된 사용자 정보 문자열을 기기에 안전하게 저장합니다.
-        //    'await'를 사용하여 저장이 완료될 때까지 기다립니다.
-        await storage.write(key: 'loggedInUser', value: userJson);
-
-        // TODO: 실제 서비스에서는 responseData['token'] 값을 저장하여 API 요청 시마다 사용해야 합니다.
-        // await storage.write(key: 'jwtToken', value: responseData['token']);
-
-        // --- ▲▲▲ 여기까지 추가 ▲▲▲ ---
-
-        // 5. 서버 응답을 UserModel 객체로 변환합니다.
+        // 서버 응답을 UserModel 객체로 변환
         final realUser = UserModel.fromJson(responseData['user']);
 
-        // 6. context가 유효한지 확인합니다. (비동기 작업 후 화면 이동 시 좋은 습관)
         if (!mounted) return;
 
-        // 7. Provider에 '진짜' 사용자 정보를 저장하여 현재 앱 세션의 로그인 상태를 업데이트합니다.
+        // Provider에 사용자 정보를 저장하여 앱의 로그인 상태를 업데이트
         Provider.of<AuthProvider>(context, listen: false).setUser(realUser);
+        print("--- 5. Provider에 사용자 정보 저장 완료 ---");
 
-        // 8. 사용자의 역할에 따라 적절한 메인 화면으로 이동합니다.
+        // 역할에 따라 다른 메인 화면으로 이동
         if (realUser.role == UserRole.patient) {
           Navigator.pushReplacementNamed(context, '/patient_main');
         } else {
           Navigator.pushReplacementNamed(context, '/admin_main');
         }
+        print("--- 6. 화면 이동 완료 ---");
+
       } catch (e) {
+        // 에러 발생 시 디버깅 정보와 사용자 피드백 표시
+        print("--- ❗️❗️❗️ 에러 발생 ❗️❗️❗️ ---");
+        print("   - 에러 타입: ${e.runtimeType}");
+        print("   - 에러 내용: $e");
+        print("--- ❗️❗️❗️ ---");
+
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(e.toString().replaceFirst("Exception: ", ""))),
         );
       }
+    } else {
+      print("--- ❗️❗️❗️ 유효성 검사 실패! ---");
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('로그인'),
-      ),
+      appBar: AppBar(title: const Text('로그인')),
       body: SafeArea(
         child: SingleChildScrollView(
           child: Padding(
@@ -97,17 +127,8 @@ class _LoginScreenState extends State<LoginScreen> {
                   const SizedBox(height: 30.0),
                   TextFormField(
                     controller: _usernameController,
-                    decoration: const InputDecoration(
-                      labelText: '아이디',
-                      prefixIcon: Icon(Icons.person_outline),
-                      border: OutlineInputBorder(),
-                    ),
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return '아이디를 입력해주세요.';
-                      }
-                      return null;
-                    },
+                    decoration: const InputDecoration(labelText: '아이디', prefixIcon: Icon(Icons.person_outline), border: OutlineInputBorder()),
+                    validator: (value) => (value == null || value.trim().isEmpty) ? '아이디를 입력해주세요.' : null,
                   ),
                   const SizedBox(height: 16.0),
                   TextFormField(
@@ -118,32 +139,20 @@ class _LoginScreenState extends State<LoginScreen> {
                       prefixIcon: const Icon(Icons.lock_outline),
                       border: const OutlineInputBorder(),
                       suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                        ),
-                        onPressed: () {
-                          setState(() {
-                            _isPasswordVisible = !_isPasswordVisible;
-                          });
-                        },
+                        icon: Icon(_isPasswordVisible ? Icons.visibility : Icons.visibility_off),
+                        onPressed: () => setState(() => _isPasswordVisible = !_isPasswordVisible),
                       ),
                     ),
-                    validator: (value) {
-                      if (value == null || value.isEmpty) {
-                        return '비밀번호를 입력해주세요.';
-                      }
-                      return null;
-                    },
+                    validator: (value) => (value == null || value.isEmpty) ? '비밀번호를 입력해주세요.' : null,
                   ),
-                  const SizedBox(height: 40.0),
+                  _buildRememberUsernameCheckbox(), // 아이디 기억하기 체크박스
+                  const SizedBox(height: 20.0),
                   ElevatedButton(
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 15),
                       textStyle: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                     ),
-                    onPressed: () {
-                      _login(context);
-                    },
+                    onPressed: () => _login(context),
                     child: const Text('로그인'),
                   ),
                 ],
@@ -157,26 +166,27 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildRoleSelector() {
     return SegmentedButton<UserRole>(
-      segments: const <ButtonSegment<UserRole>>[
-        ButtonSegment<UserRole>(
-            value: UserRole.patient,
-            label: Text('환자'),
-            icon: Icon(Icons.personal_injury_outlined)),
-        ButtonSegment<UserRole>(
-            value: UserRole.admin,
-            label: Text('관리자'),
-            icon: Icon(Icons.admin_panel_settings_outlined)),
+      segments: const [
+        ButtonSegment<UserRole>(value: UserRole.patient, label: Text('환자'), icon: Icon(Icons.personal_injury_outlined)),
+        ButtonSegment<UserRole>(value: UserRole.admin, label: Text('관리자'), icon: Icon(Icons.admin_panel_settings_outlined)),
       ],
-      selected: <UserRole>{_selectedRole},
-      onSelectionChanged: (Set<UserRole> newSelection) {
-        setState(() {
-          _selectedRole = newSelection.first;
-        });
-      },
-      style: SegmentedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        textStyle: const TextStyle(fontSize: 16),
-      ),
+      selected: {_selectedRole},
+      onSelectionChanged: (newSelection) => setState(() => _selectedRole = newSelection.first),
+      style: SegmentedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 12), textStyle: const TextStyle(fontSize: 16)),
+    );
+  }
+
+  // 아이디 기억하기 체크박스 위젯을 만드는 함수
+  Widget _buildRememberUsernameCheckbox() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Checkbox(
+          value: _rememberUsername,
+          onChanged: (value) => setState(() => _rememberUsername = value ?? false),
+        ),
+        const Text('아이디 기억하기'),
+      ],
     );
   }
 }
