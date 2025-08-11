@@ -14,30 +14,40 @@ class StartScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // TODO: 여기에 앱 로고나 제목을 추가하면 좋습니다.
                 const Spacer(flex: 2),
+
+                // ✅ 표지 이미지
+                Image.asset(
+                  'assets/images/logo.png', // pubspec.yaml에 등록된 경로
+                  height: 180, // 원하는 크기
+                  fit: BoxFit.contain,
+                ),
+                const SizedBox(height: 40),
+
+                // 로그인 버튼
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
                   onPressed: () {
-                    // 1단계에서 설정한 '/login' 경로로 이동
                     Navigator.pushNamed(context, '/login');
                   },
                   child: const Text('로그인', style: TextStyle(fontSize: 18)),
                 ),
                 const SizedBox(height: 15),
+
+                // 회원가입 버튼
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 15),
-                    backgroundColor: Colors.grey[700], // 버튼 색상 변경
+                    backgroundColor: Colors.grey[700],
                   ),
                   onPressed: () {
-                    // 1단계에서 설정한 '/signup' 경로로 이동
                     Navigator.pushNamed(context, '/signup');
                   },
                   child: const Text('회원가입', style: TextStyle(fontSize: 18)),
                 ),
+
                 const Spacer(flex: 3),
               ],
             ),

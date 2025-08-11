@@ -1,23 +1,24 @@
 package com.example.smart_pad.domain;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
-import lombok.AccessLevel;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
 
 @Entity
-@Table(name = "users") // DB 테이블 이름을 'user'가 아닌 'users'로 지정
+@Table(name = "users")
 @Getter
-@NoArgsConstructor(access = AccessLevel.PROTECTED) // 기본 생성자 보호
+@Setter // Setter 어노테이션이 있어야 setName() 메서드가 동작합니다.
+@Builder
+@AllArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class User {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY) // MySQL의 auto_increment
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "user_id")
     private Long id;
 
-    @Column(nullable = false, unique = true) // null 불가, 중복 불가
+    @Column(nullable = false, unique = true)
     private String username;
 
     @Column(nullable = false)
@@ -26,15 +27,17 @@ public class User {
     @Column(nullable = false)
     private String name;
 
-    @Enumerated(EnumType.STRING) // Enum 타입을 문자열로 저장
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private UserRole role;
 
-    @Builder
-    public User(String username, String password, String name, UserRole role) {
-        this.username = username;
-        this.password = password;
-        this.name = name;
-        this.role = role;
-    }
+    // ▼▼▼ 환자 상세 정보 필드 추가 (User는 연관관계의 주인이 아님) ▼▼▼
+    @JsonIgnore // JSON 직렬화 시 무시하여 순환 참조를 방지합니다.
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY)
+    private PatientDetail patientDetail;
+
+    // ▼▼▼ 관리자 상세 정보 필드 추가 (User는 연관관계의 주인이 아님) ▼▼▼
+    @JsonIgnore // JSON 직렬화 시 무시하여 순환 참조를 방지합니다.
+    @OneToOne(mappedBy = "user", fetch = FetchType.LAZY)
+    private AdminDetail adminDetail;
 }
