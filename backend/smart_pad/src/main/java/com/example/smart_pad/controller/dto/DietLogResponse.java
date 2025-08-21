@@ -1,4 +1,3 @@
-// DietLogResponse.java
 package com.example.smart_pad.controller.dto;
 
 import com.fasterxml.jackson.annotation.JsonFormat;
@@ -18,4 +17,5 @@ public class DietLogResponse {
     private String mealType;
     private String mainDish;
     private String subDish;
+    private Integer proteinGrams; // 단백질량 필드 추가
 }

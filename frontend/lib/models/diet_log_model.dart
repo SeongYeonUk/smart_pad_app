@@ -1,9 +1,12 @@
+import 'package:flutter/foundation.dart';
+
 class DietLogModel {
   final int? id;              // 서버가 넣어줄 수도, 없을 수도 있으니 옵셔널
   final DateTime date;        // 화면에서 DateTime으로 사용
   final String mealType;      // '아침' | '점심' | '저녁'
   final String mainDish;
   final String? subDish;
+  final int? proteinGrams;    // 단백질량 필드 추가
 
   DietLogModel({
     this.id,
@@ -11,6 +14,7 @@ class DietLogModel {
     required this.mealType,
     required this.mainDish,
     this.subDish,
+    this.proteinGrams,        // 생성자에 추가
   });
 
   factory DietLogModel.fromJson(Map<String, dynamic> json) {
@@ -32,9 +36,8 @@ class DietLogModel {
       mealType: (json['mealType'] as String?) ?? '',
       mainDish: (json['mainDish'] as String?) ?? '',
       subDish: json['subDish'] as String?,
+      proteinGrams: (json['proteinGrams'] as num?)?.toInt(), // proteinGrams 파싱
     );
-    // ⚠️ 키 이름은 서버 JSON에 맞춰야 합니다.
-    // 서버가 snake_case면 여기 키도 맞춰 바꾸세요.
   }
 
   Map<String, dynamic> toJsonForCreate() {
@@ -47,6 +50,7 @@ class DietLogModel {
       'mealType': mealType,
       'mainDish': mainDish,
       'subDish': subDish,
+      'proteinGrams': proteinGrams, // proteinGrams 추가
     };
   }
 }

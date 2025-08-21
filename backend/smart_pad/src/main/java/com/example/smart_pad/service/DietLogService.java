@@ -21,44 +21,42 @@ public class DietLogService {
     private final UserRepository userRepository;
 
     /**
-     * 식단 기록 저장
+     * 식단 기록 생성 또는 수정
+     * 요청에 ID가 있으면 수정, 없으면 새로 생성
      */
     @Transactional
-    public void saveDietLog(Long userId, DietLogRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-
-        DietLog dietLog = new DietLog();
-        dietLog.setUser(user);
-        dietLog.setDate(request.getDate());
-        dietLog.setMealType(request.getMealType());
-        dietLog.setMainDish(request.getMainDish());
-        dietLog.setSubDish(request.getSubDish());
-
-        dietLogRepository.save(dietLog);
-    }
-
-    // ▼▼▼ 식단 기록을 저장하고 DTO로 반환하는 새로운 메서드를 추가합니다.
-    @Transactional
-    public DietLogResponse saveDietLogAndReturnDto(Long userId, DietLogRequest request) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
-
-        DietLog dietLog = new DietLog();
-        dietLog.setUser(user);
-        dietLog.setDate(request.getDate());
-        dietLog.setMealType(request.getMealType());
-        dietLog.setMainDish(request.getMainDish());
-        dietLog.setSubDish(request.getSubDish());
+    public DietLogResponse createOrUpdateDietLog(DietLogRequest request) {
+        DietLog dietLog;
+        if (request.getId() != null) {
+            // 수정 로직
+            dietLog = dietLogRepository.findById(request.getId())
+                    .orElseThrow(() -> new IllegalArgumentException("식단 기록을 찾을 수 없습니다."));
+            dietLog.setDate(request.getDate());
+            dietLog.setMealType(request.getMealType());
+            dietLog.setMainDish(request.getMainDish());
+            dietLog.setSubDish(request.getSubDish());
+            dietLog.setProteinGrams(request.getProteinGrams());
+        } else {
+            // 생성 로직
+            User user = userRepository.findById(request.getUserId())
+                    .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+            dietLog = new DietLog();
+            dietLog.setUser(user);
+            dietLog.setDate(request.getDate());
+            dietLog.setMealType(request.getMealType());
+            dietLog.setMainDish(request.getMainDish());
+            dietLog.setSubDish(request.getSubDish());
+            dietLog.setProteinGrams(request.getProteinGrams());
+        }
 
         DietLog savedLog = dietLogRepository.save(dietLog);
-
         return DietLogResponse.builder()
                 .id(savedLog.getId())
                 .date(savedLog.getDate())
                 .mealType(savedLog.getMealType())
                 .mainDish(savedLog.getMainDish())
                 .subDish(savedLog.getSubDish())
+                .proteinGrams(savedLog.getProteinGrams())
                 .build();
     }
 
@@ -76,7 +74,16 @@ public class DietLogService {
                         .mealType(log.getMealType())
                         .mainDish(log.getMainDish())
                         .subDish(log.getSubDish())
+                        .proteinGrams(log.getProteinGrams())
                         .build())
                 .collect(Collectors.toList());
+    }
+
+    /**
+     * 식단 기록 삭제
+     */
+    @Transactional
+    public void deleteDietLog(Long logId) {
+        dietLogRepository.deleteById(logId);
     }
 }

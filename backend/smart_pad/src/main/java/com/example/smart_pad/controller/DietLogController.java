@@ -1,4 +1,3 @@
-// DietLogController.java
 package com.example.smart_pad.controller;
 
 import com.example.smart_pad.controller.dto.DietLogRequest;
@@ -21,13 +20,32 @@ public class DietLogController {
     public ResponseEntity<?> saveDietLog(@PathVariable Long userId,
                                          @RequestBody DietLogRequest request) {
         try {
-            DietLogResponse created = dietLogService.saveDietLogAndReturnDto(userId, request);
+            // userId를 DTO에 설정
+            request.setUserId(userId);
+            DietLogResponse created = dietLogService.createOrUpdateDietLog(request);
             return ResponseEntity.status(HttpStatus.CREATED).body(created);
         } catch (IllegalArgumentException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("식단 기록 저장 중 오류가 발생했습니다.");
+        }
+    }
+
+    // ✅ 식단 기록 수정
+    @PutMapping("/{logId}")
+    public ResponseEntity<?> updateDietLog(@PathVariable Long logId,
+                                           @RequestBody DietLogRequest request) {
+        try {
+            // logId를 DTO에 설정
+            request.setId(logId);
+            DietLogResponse updated = dietLogService.createOrUpdateDietLog(request);
+            return ResponseEntity.status(HttpStatus.OK).body(updated);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(e.getMessage());
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("식단 기록 수정 중 오류가 발생했습니다.");
         }
     }
 
@@ -40,6 +58,17 @@ public class DietLogController {
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body("식단 기록 조회 중 오류가 발생했습니다.");
+        }
+    }
+
+    // ✅ 식단 기록 삭제
+    @DeleteMapping("/{logId}")
+    public ResponseEntity<Void> deleteDietLog(@PathVariable Long logId) {
+        try {
+            dietLogService.deleteDietLog(logId);
+            return ResponseEntity.status(HttpStatus.OK).build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
 }

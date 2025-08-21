@@ -15,6 +15,7 @@ import com.example.smart_pad.repository.PatientDetailRepository;
 import com.example.smart_pad.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,24 +52,24 @@ public class AuthService {
         User savedUser = userRepository.save(user);
 
         if (savedUser.getRole() == UserRole.PATIENT) {
-            PatientDetailDto patientDetailDto = request.getPatientDetail();
-            if (patientDetailDto != null) {
-                PatientDetail patientDetail = new PatientDetail();
-                patientDetail.setUser(savedUser);
-                patientDetail.setWeight(patientDetailDto.getWeight());
-                patientDetail.setAgeRange(patientDetailDto.getAgeRange());
-                patientDetail.setSensoryPerception(patientDetailDto.getSensoryPerception());
-                patientDetail.setActivityLevel(patientDetailDto.getActivityLevel());
-                patientDetail.setMovementLevel(patientDetailDto.getMovementLevel());
-                patientDetailRepository.save(patientDetail);
+            PatientDetailDto dto = request.getPatientDetail();
+            if (dto != null) {
+                PatientDetail detail = new PatientDetail();
+                detail.setUser(savedUser);
+                detail.setWeight(dto.getWeight());
+                detail.setAgeRange(dto.getAgeRange());
+                detail.setSensoryPerception(dto.getSensoryPerception());
+                detail.setActivityLevel(dto.getActivityLevel());
+                detail.setMovementLevel(dto.getMovementLevel());
+                patientDetailRepository.save(detail);
             }
         } else if (savedUser.getRole() == UserRole.ADMIN) {
-            AdminDetailDto adminDetailDto = request.getAdminDetail();
-            if (adminDetailDto != null) {
-                AdminDetail adminDetail = new AdminDetail();
-                adminDetail.setUser(savedUser);
-                adminDetail.setHospitalName(adminDetailDto.getHospitalName());
-                adminDetailRepository.save(adminDetail);
+            AdminDetailDto dto = request.getAdminDetail();
+            if (dto != null) {
+                AdminDetail detail = new AdminDetail();
+                detail.setUser(savedUser);
+                detail.setHospitalName(dto.getHospitalName());
+                adminDetailRepository.save(detail);
             }
         }
     }
@@ -87,7 +88,6 @@ public class AuthService {
         Map<String, Object> response = new HashMap<>();
         response.put("token", token);
         response.put("user", user);
-
         return response;
     }
 
@@ -97,10 +97,10 @@ public class AuthService {
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
         if (user.getRole() == UserRole.PATIENT) {
-            patientDetailRepository.findByUserId(user.getId())
+            patientDetailRepository.findByUser_Id(user.getId())
                     .ifPresent(patientDetailRepository::delete);
         } else if (user.getRole() == UserRole.ADMIN) {
-            adminDetailRepository.findByUserId(user.getId())
+            adminDetailRepository.findByUser_Id(user.getId())
                     .ifPresent(adminDetailRepository::delete);
         }
 
@@ -114,7 +114,7 @@ public class AuthService {
             return Optional.empty();
         }
 
-        return patientDetailRepository.findByUserId(userId)
+        return patientDetailRepository.findByUser_Id(userId)
                 .map(pd -> ProfileDetailResponse.builder()
                         .id(user.get().getId())
                         .name(user.get().getName())
@@ -137,7 +137,7 @@ public class AuthService {
             return Optional.empty();
         }
 
-        return adminDetailRepository.findByUserId(userId)
+        return adminDetailRepository.findByUser_Id(userId)
                 .map(ad -> ProfileDetailResponse.builder()
                         .id(user.get().getId())
                         .name(user.get().getName())
@@ -149,13 +149,12 @@ public class AuthService {
                         .build()));
     }
 
-    // ★★★ 핵심: 부분 업데이트 + NPE 방지
+    // ★ 부분 업데이트 + NPE 방지
     @Transactional
     public void updateProfile(Long userId, UpdateProfileRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
-        // 이름 부분 업데이트
         if (request.getName() != null) {
             user.setName(request.getName());
             userRepository.save(user);
@@ -164,7 +163,7 @@ public class AuthService {
         if (user.getRole() == UserRole.PATIENT) {
             PatientDetailDto dto = request.getPatientDetail();
             if (dto != null) {
-                PatientDetail detail = patientDetailRepository.findByUserId(userId)
+                PatientDetail detail = patientDetailRepository.findByUser_Id(userId)
                         .orElseGet(() -> {
                             PatientDetail pd = new PatientDetail();
                             pd.setUser(user);
@@ -182,7 +181,7 @@ public class AuthService {
         } else if (user.getRole() == UserRole.ADMIN) {
             AdminDetailDto dto = request.getAdminDetail();
             if (dto != null) {
-                AdminDetail detail = adminDetailRepository.findByUserId(userId)
+                AdminDetail detail = adminDetailRepository.findByUser_Id(userId)
                         .orElseGet(() -> {
                             AdminDetail ad = new AdminDetail();
                             ad.setUser(user);
@@ -190,9 +189,29 @@ public class AuthService {
                         });
 
                 if (dto.getHospitalName() != null) detail.setHospitalName(dto.getHospitalName());
-
                 adminDetailRepository.save(detail);
             }
         }
+    }
+
+    /**
+     * Authentication으로부터 현재 로그인한 사용자 ID 반환
+     */
+    @Transactional(readOnly = true)
+    public Long getUserIdFromAuthentication(Authentication authentication) {
+        String username = authentication.getName();
+        return userRepository.findByUsername(username)
+                .map(User::getId)
+                .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
+    }
+
+    /**
+     * 로그인 사용자 ID로 PatientDetail 조회
+     * - 파라미터명은 patientId가 아니라 userId에 해당함
+     */
+    @Transactional(readOnly = true)
+    public PatientDetail getPatientDetailById(Long userId) {
+        return patientDetailRepository.findByUser_Id(userId)
+                .orElseThrow(() -> new IllegalArgumentException("환자 정보를 찾을 수 없습니다."));
     }
 }

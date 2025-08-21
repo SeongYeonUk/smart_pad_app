@@ -32,4 +32,8 @@ public class DietLog {
 
     @Column(name = "sub_dish")
     private String subDish;
+
+    // 단백질량 필드 추가
+    @Column(name = "protein_grams")
+    private Integer proteinGrams;
 }
