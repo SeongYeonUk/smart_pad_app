@@ -23,10 +23,10 @@ class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
 
   @override
-  State<NotificationScreen> createState() => _NotificationScreenState();
+  NotificationScreenState createState() => NotificationScreenState();
 }
 
-class _NotificationScreenState extends State<NotificationScreen> {
+class NotificationScreenState extends State<NotificationScreen> {
   // TODO: 실제로는 서버 API 또는 로컬 DB에서 알림 목록을 받아와야 합니다.
   final List<DummyNotification> _notifications = [
     DummyNotification(
@@ -58,7 +58,21 @@ class _NotificationScreenState extends State<NotificationScreen> {
     ),
   ];
 
-  // 알림 타입에 따라 다른 아이콘과 색상을 반환하는 헬퍼 클래스
+  // ===== 상위(AppBar)에서 호출할 공개 메서드 =====
+  Future<void> markAllAsReadPublic() async {
+    setState(() {
+      for (var n in _notifications) {
+        n.isRead = true;
+      }
+    });
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('모든 알림을 읽음 처리했습니다.')),
+    );
+  }
+  // ============================================
+
+  // 알림 타입에 따라 다른 아이콘과 색상을 반환
   ({IconData icon, Color color}) _getNotificationStyle(NotificationType type) {
     switch (type) {
       case NotificationType.risk:
@@ -70,70 +84,75 @@ class _NotificationScreenState extends State<NotificationScreen> {
     }
   }
 
+  String _formatRelativeTime(DateTime t) {
+    final now = DateTime.now();
+    final diff = now.difference(t);
+    if (diff.inMinutes < 1) return '방금 전';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}분 전';
+    if (diff.inHours < 24) return '${diff.inHours}시간 전';
+    return '${diff.inDays}일 전';
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('알림'),
-        actions: [
-          // 모든 알림을 읽음 처리하는 버튼
-          TextButton(
-            onPressed: () {
-              setState(() {
-                for (var notification in _notifications) {
-                  notification.isRead = true;
-                }
-              });
-            },
-            child: const Text('모두 읽음'),
-          )
-        ],
-      ),
-      body: _notifications.isEmpty
+    // 🔴 내부 Scaffold/AppBar 제거 → 상위 PatientShell이 제공
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: _notifications.isEmpty
           ? const Center(
         child: Text(
           '새로운 알림이 없습니다.',
           style: TextStyle(fontSize: 18, color: Colors.grey),
         ),
       )
-          : ListView.builder(
+          : ListView.separated(
         itemCount: _notifications.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 8),
         itemBuilder: (context, index) {
-          final notification = _notifications[index];
-          final style = _getNotificationStyle(notification.type);
+          final n = _notifications[index];
+          final style = _getNotificationStyle(n.type);
 
-          return ListTile(
-            // 읽지 않은 알림은 배경색을 다르게 표시
-            tileColor: notification.isRead ? null : Colors.blue.withOpacity(0.05),
-            leading: CircleAvatar(
-              backgroundColor: style.color,
-              child: Icon(style.icon, color: Colors.white),
+          return Ink(
+            decoration: BoxDecoration(
+              color: n.isRead ? Colors.transparent : Colors.blue.withOpacity(0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: n.isRead ? Colors.grey.shade300 : Colors.blue.shade100,
+              ),
             ),
-            title: Text(
-              notification.title,
-              style: const TextStyle(fontWeight: FontWeight.bold),
+            child: ListTile(
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              leading: CircleAvatar(
+                backgroundColor: style.color,
+                child: Icon(style.icon, color: Colors.white),
+              ),
+              title: Text(n.title, style: const TextStyle(fontWeight: FontWeight.bold)),
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(n.body),
+                  const SizedBox(height: 4),
+                  Text(
+                    _formatRelativeTime(n.timestamp),
+                    style: const TextStyle(color: Colors.grey, fontSize: 12),
+                  ),
+                ],
+              ),
+              isThreeLine: true,
+              trailing: n.isRead
+                  ? const SizedBox.shrink()
+                  : IconButton(
+                tooltip: '읽음으로 표시',
+                icon: const Icon(Icons.done_all),
+                onPressed: () {
+                  setState(() => n.isRead = true);
+                },
+              ),
+              onTap: () {
+                setState(() => n.isRead = true);
+                // TODO: 알림 종류별 상세 화면 이동 로직 (예: 위험도 -> 위험도 화면)
+              },
             ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(notification.body),
-                const SizedBox(height: 4),
-                Text(
-                  // TODO: 시간 표시를 '5분 전', '1시간 전' 등으로 바꿔주는 timeago 패키지 사용 추천
-                  '${notification.timestamp.hour}:${notification.timestamp.minute.toString().padLeft(2, '0')}',
-                  style: const TextStyle(color: Colors.grey, fontSize: 12),
-                ),
-              ],
-            ),
-            isThreeLine: true,
-            onTap: () {
-              // 알림을 탭하면 읽음 처리
-              setState(() {
-                notification.isRead = true;
-              });
-              // TODO: 알림 종류에 따라 관련된 상세 화면으로 이동하는 로직 추가 가능
-              // 예: 위험도 알림 -> 위험도 점수 화면으로 이동
-            },
           );
         },
       ),

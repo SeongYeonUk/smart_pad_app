@@ -3,6 +3,8 @@ package com.example.smart_pad.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -10,6 +12,11 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -19,23 +26,56 @@ public class SecurityConfig {
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
     @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
+    public PasswordEncoder passwordEncoder() { return new BCryptPasswordEncoder(); }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        CorsConfiguration c = new CorsConfiguration();
+        c.setAllowedOrigins(List.of(
+                "http://10.0.2.2:8080",
+                "http://localhost:8080",
+                "http://127.0.0.1:8080",
+                "*" // dev only
+        ));
+        c.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
+        c.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "Origin"));
+        c.setAllowCredentials(true);
+        c.setMaxAge(3600L);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", c);
+        return source;
     }
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                .cors(Customizer.withDefaults())
                 .csrf(csrf -> csrf.disable())
                 .httpBasic(b -> b.disable())
                 .formLogin(f -> f.disable())
                 .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
+                        // Auth
                         .requestMatchers("/api/auth/**").permitAll()
-                        // 센서 데이터 API 엔드포인트에 대한 접근 허용 (인증 없이)
-                        .requestMatchers("/api/sensor-data/**").permitAll() // <--- 이 부분을 authenticated()에서 permitAll()로 수정했습니다.
-                        // 필요 시 공개하고 싶은 조회 API 더 열 수 있음:
-                        // .requestMatchers("/api/patient_detail/**", "/api/admin_detail/**").permitAll()
+
+                        // WebSocket handshake
+                        .requestMatchers("/ws/**").permitAll()
+
+                        // ✅ 에러 디스패치 경로는 항상 허용 (Lazy 직렬화 예외가 403로 포장되는 것 방지)
+                        .requestMatchers("/error").permitAll()
+
+                        // Static/health
+                        .requestMatchers(HttpMethod.GET, "/", "/index.html", "/favicon.ico", "/static/**").permitAll()
+                        .requestMatchers("/actuator/health").permitAll()
+
+                        // Ingest(데모: 무인증)
+                        .requestMatchers(HttpMethod.POST, "/api/sensor-data").permitAll()
+
+                        // ✅ 조회는 '인증만' 요구(명시)
+                        .requestMatchers(HttpMethod.GET, "/api/sensor-data/**").authenticated()
+
+                        // 그 외
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

@@ -34,18 +34,33 @@ public class AuthService {
     private final PatientDetailRepository patientDetailRepository;
     private final AdminDetailRepository adminDetailRepository;
 
+    /**
+     * 회원가입
+     * - username 중복 체크
+     * - 비밀번호 해시
+     * - 역할(PATIENT/ADMIN)에 따라 Detail 엔티티 생성
+     */
     @Transactional
     public void signup(SignUpRequest request) {
-        if (userRepository.findByUsername(request.getUsername()).isPresent()) {
+        final String username = safeTrim(request.getUsername());
+        if (username == null || username.isEmpty()) {
+            throw new IllegalArgumentException("아이디를 입력해주세요.");
+        }
+        if (userRepository.findByUsername(username).isPresent()) {
             throw new IllegalArgumentException("이미 사용 중인 아이디입니다.");
         }
 
-        String encodedPassword = passwordEncoder.encode(request.getPassword());
+        final String rawPassword = request.getPassword();
+        if (rawPassword == null || rawPassword.isBlank()) {
+            throw new IllegalArgumentException("비밀번호를 입력해주세요.");
+        }
+
+        String encodedPassword = passwordEncoder.encode(rawPassword);
 
         User user = User.builder()
-                .username(request.getUsername())
+                .username(username)
                 .password(encodedPassword)
-                .name(request.getName())
+                .name(safeTrim(request.getName()))
                 .role(request.getRole())
                 .build();
 
@@ -74,9 +89,22 @@ public class AuthService {
         }
     }
 
+    /**
+     * 로그인
+     * - 아이디/비밀번호 검증
+     * - JWT 생성 후 {"token": "...", "user": <필요정보>} 반환
+     */
     @Transactional(readOnly = true)
     public Map<String, Object> login(String username, String password) {
-        User user = userRepository.findByUsername(username)
+        final String uname = safeTrim(username);
+        if (uname == null || uname.isEmpty()) {
+            throw new IllegalArgumentException("아이디를 입력해주세요.");
+        }
+        if (password == null || password.isBlank()) {
+            throw new BadCredentialsException("비밀번호를 입력해주세요.");
+        }
+
+        User user = userRepository.findByUsername(uname)
                 .orElseThrow(() -> new IllegalArgumentException("가입되지 않은 아이디입니다."));
 
         if (!passwordEncoder.matches(password, user.getPassword())) {
@@ -87,13 +115,19 @@ public class AuthService {
 
         Map<String, Object> response = new HashMap<>();
         response.put("token", token);
+        // 필요 시 user 전체를 내보내지 말고 필요한 최소 필드만 DTO로 내려도 됨
         response.put("user", user);
         return response;
     }
 
+    /**
+     * 사용자 삭제
+     * - 역할에 맞는 상세 엔티티부터 제거 후 사용자 삭제
+     */
     @Transactional
     public void deleteUser(String username) {
-        User user = userRepository.findByUsername(username)
+        final String uname = safeTrim(username);
+        User user = userRepository.findByUsername(uname)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
         if (user.getRole() == UserRole.PATIENT) {
@@ -107,17 +141,19 @@ public class AuthService {
         userRepository.delete(user);
     }
 
+    /**
+     * 환자 프로필 조회 (환자 상세 없으면 사용자 기본 정보만 반환)
+     */
     @Transactional(readOnly = true)
     public Optional<ProfileDetailResponse> fetchPatientDetail(Long userId) {
-        Optional<User> user = userRepository.findById(userId);
-        if (user.isEmpty()) {
-            return Optional.empty();
-        }
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) return Optional.empty();
 
+        User user = userOpt.get();
         return patientDetailRepository.findByUser_Id(userId)
                 .map(pd -> ProfileDetailResponse.builder()
-                        .id(user.get().getId())
-                        .name(user.get().getName())
+                        .id(user.getId())
+                        .name(user.getName())
                         .weight(pd.getWeight())
                         .ageRange(pd.getAgeRange())
                         .sensoryPerception(pd.getSensoryPerception())
@@ -125,39 +161,48 @@ public class AuthService {
                         .movementLevel(pd.getMovementLevel())
                         .build())
                 .or(() -> Optional.of(ProfileDetailResponse.builder()
-                        .id(user.get().getId())
-                        .name(user.get().getName())
+                        .id(user.getId())
+                        .name(user.getName())
                         .build()));
     }
 
+    /**
+     * 관리자 프로필 조회 (관리자 상세 없으면 사용자 기본 정보만 반환)
+     */
     @Transactional(readOnly = true)
     public Optional<ProfileDetailResponse> fetchAdminDetail(Long userId) {
-        Optional<User> user = userRepository.findById(userId);
-        if (user.isEmpty()) {
-            return Optional.empty();
-        }
+        Optional<User> userOpt = userRepository.findById(userId);
+        if (userOpt.isEmpty()) return Optional.empty();
 
+        User user = userOpt.get();
         return adminDetailRepository.findByUser_Id(userId)
                 .map(ad -> ProfileDetailResponse.builder()
-                        .id(user.get().getId())
-                        .name(user.get().getName())
+                        .id(user.getId())
+                        .name(user.getName())
                         .hospitalName(ad.getHospitalName())
                         .build())
                 .or(() -> Optional.of(ProfileDetailResponse.builder()
-                        .id(user.get().getId())
-                        .name(user.get().getName())
+                        .id(user.getId())
+                        .name(user.getName())
                         .build()));
     }
 
-    // ★ 부분 업데이트 + NPE 방지
+    /**
+     * 프로필 업데이트(부분 업데이트 + NPE 방지)
+     * - 이름은 공백 문자열이면 무시
+     * - 역할에 따라 상세 엔티티 upsert
+     */
     @Transactional
     public void updateProfile(Long userId, UpdateProfileRequest request) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다."));
 
         if (request.getName() != null) {
-            user.setName(request.getName());
-            userRepository.save(user);
+            String newName = safeTrim(request.getName());
+            if (newName != null && !newName.isEmpty()) {
+                user.setName(newName);
+                userRepository.save(user);
+            }
         }
 
         if (user.getRole() == UserRole.PATIENT) {
@@ -195,10 +240,14 @@ public class AuthService {
     }
 
     /**
-     * Authentication으로부터 현재 로그인한 사용자 ID 반환
+     * Authentication → 현재 로그인한 사용자 ID
+     * - SecurityContext에 세팅된 principal의 username을 기반으로 조회
      */
     @Transactional(readOnly = true)
     public Long getUserIdFromAuthentication(Authentication authentication) {
+        if (authentication == null || !authentication.isAuthenticated()) {
+            throw new IllegalArgumentException("인증 정보가 없습니다.");
+        }
         String username = authentication.getName();
         return userRepository.findByUsername(username)
                 .map(User::getId)
@@ -206,12 +255,18 @@ public class AuthService {
     }
 
     /**
-     * 로그인 사용자 ID로 PatientDetail 조회
-     * - 파라미터명은 patientId가 아니라 userId에 해당함
+     * 로그인 사용자 ID로 PatientDetail 조회 (없으면 예외)
      */
     @Transactional(readOnly = true)
     public PatientDetail getPatientDetailById(Long userId) {
         return patientDetailRepository.findByUser_Id(userId)
                 .orElseThrow(() -> new IllegalArgumentException("환자 정보를 찾을 수 없습니다."));
+    }
+
+    /**
+     * (유틸) 공백/널 안전 트림
+     */
+    private String safeTrim(String s) {
+        return (s == null) ? null : s.trim();
     }
 }

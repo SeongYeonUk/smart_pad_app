@@ -4,16 +4,15 @@ import 'package:smart_pad_app/models/user_model.dart';
 import 'package:smart_pad_app/models/diet_log_model.dart';
 import 'package:smart_pad_app/providers/auth_provider.dart';
 import 'package:smart_pad_app/services/api_service.dart';
-import 'dart:math';
 
 class DietInfoScreen extends StatefulWidget {
   const DietInfoScreen({super.key});
 
   @override
-  State<DietInfoScreen> createState() => _DietInfoScreenState();
+  DietInfoScreenState createState() => DietInfoScreenState();
 }
 
-class _DietInfoScreenState extends State<DietInfoScreen> {
+class DietInfoScreenState extends State<DietInfoScreen> {
   List<DietLogModel> _dietLogs = [];
   bool _isLoading = true;
   UserModel? _user;
@@ -23,6 +22,9 @@ class _DietInfoScreenState extends State<DietInfoScreen> {
     super.initState();
     _loadDietLogs();
   }
+
+  /// 상위(AppBar 등)에서 호출할 수 있는 새로고침 공개 메서드 (옵션)
+  Future<void> refreshPublic() => _loadDietLogs();
 
   Future<void> _loadDietLogs() async {
     _user = Provider.of<AuthProvider>(context, listen: false).user;
@@ -51,7 +53,7 @@ class _DietInfoScreenState extends State<DietInfoScreen> {
   void _showAddDietLogModal() {
     showModalBottomSheet(
       context: context,
-      isScrollControlled: true, // Allows the modal to take up more screen space
+      isScrollControlled: true,
       builder: (ctx) {
         return AddDietLogForm(
           onAddDietLog: (created) {
@@ -75,19 +77,15 @@ class _DietInfoScreenState extends State<DietInfoScreen> {
         return AddDietLogForm(
           initialData: logToEdit,
           onAddDietLog: (updated) {
-            // Update the list with the edited log
             setState(() {
               final index = _dietLogs.indexWhere((log) => log.id == updated.id);
-              if (index != -1) {
-                _dietLogs[index] = updated;
-              }
+              if (index != -1) _dietLogs[index] = updated;
             });
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(content: Text('식단 기록이 수정되었습니다.')),
             );
           },
           onDelete: (deletedLogId) {
-            // Remove the deleted log from the list
             setState(() {
               _dietLogs.removeWhere((log) => log.id == deletedLogId);
             });
@@ -104,50 +102,60 @@ class _DietInfoScreenState extends State<DietInfoScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('식생활 정보')),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _dietLogs.isEmpty
-          ? const Center(child: Text('식단 기록이 없습니다.'))
-          : ListView.builder(
-        itemCount: _dietLogs.length,
-        itemBuilder: (context, index) {
-          final log = _dietLogs[index];
-          final d = log.date;
-          return Card(
-            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: ListTile(
-              onTap: () => _showEditDietLogModal(log), // Added onTap for editing
-              leading: _getMealIcon(log.mealType, theme),
-              title: RichText(
-                text: TextSpan(
-                  style: DefaultTextStyle.of(context).style,
-                  children: [
-                    TextSpan(
-                      text: '${d.year}.${d.month}.${d.day} (${log.mealType})',
-                      style: theme.textTheme.titleMedium,
+    // 🔴 내부 Scaffold/AppBar 없음 — 바디만 반환
+    return Stack(
+      children: [
+        if (_isLoading)
+          const Center(child: CircularProgressIndicator())
+        else if (_dietLogs.isEmpty)
+          const Center(child: Text('식단 기록이 없습니다.'))
+        else
+          ListView.builder(
+            padding: const EdgeInsets.only(bottom: 88, top: 8),
+            itemCount: _dietLogs.length,
+            itemBuilder: (context, index) {
+              final log = _dietLogs[index];
+              final d = log.date;
+              return Card(
+                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: ListTile(
+                  onTap: () => _showEditDietLogModal(log),
+                  leading: _getMealIcon(log.mealType, theme),
+                  title: RichText(
+                    text: TextSpan(
+                      style: DefaultTextStyle.of(context).style,
+                      children: [
+                        TextSpan(
+                          text: '${d.year}.${d.month}.${d.day} (${log.mealType})',
+                          style: theme.textTheme.titleMedium,
+                        ),
+                        if (log.proteinGrams != null)
+                          TextSpan(
+                            text: '  단백질: ${log.proteinGrams}g',
+                            style: theme.textTheme.bodyMedium,
+                          ),
+                      ],
                     ),
-                    if (log.proteinGrams != null)
-                      TextSpan(
-                        text: '  단백질: ${log.proteinGrams}g',
-                        style: theme.textTheme.bodyMedium, // Changed to bodyMedium
-                      ),
-                  ],
+                  ),
+                  subtitle: Text(
+                    '주요리: ${log.mainDish}'
+                        '${log.subDish != null && log.subDish!.isNotEmpty ? ", 부요리: ${log.subDish}" : ""}',
+                  ),
                 ),
-              ),
-              subtitle: Text(
-                '주요리: ${log.mainDish}'
-                    '${log.subDish != null && log.subDish!.isNotEmpty ? ", 부요리: ${log.subDish}" : ""}',
-              ),
-            ),
-          );
-        },
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _showAddDietLogModal,
-        child: const Icon(Icons.add),
-      ),
+              );
+            },
+          ),
+
+        // ✅ Scaffold 없이도 플로팅 버튼처럼 우측 하단에 배치
+        Positioned(
+          right: 16,
+          bottom: 16,
+          child: FloatingActionButton(
+            onPressed: _showAddDietLogModal,
+            child: const Icon(Icons.add),
+          ),
+        ),
+      ],
     );
   }
 
@@ -174,15 +182,15 @@ class _DietInfoScreenState extends State<DietInfoScreen> {
 enum ProteinInputMethod { manual, food, general }
 
 class AddDietLogForm extends StatefulWidget {
-  final DietLogModel? initialData; // Added initialData for editing
+  final DietLogModel? initialData; // 편집 시 사용
   final void Function(DietLogModel created) onAddDietLog;
-  final void Function(int deletedLogId)? onDelete; // Callback for deletion
+  final void Function(int deletedLogId)? onDelete; // 삭제 콜백
 
   const AddDietLogForm({
     super.key,
-    this.initialData, // Made optional
+    this.initialData,
     required this.onAddDietLog,
-    this.onDelete, // Made optional
+    this.onDelete,
   });
 
   @override
@@ -197,13 +205,13 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
   final _subDishController = TextEditingController();
   bool _saving = false;
 
-  // New state variables for protein input
-  ProteinInputMethod _proteinInputMethod = ProteinInputMethod.general; // Default to general
+  // 단백질 입력 방식
+  ProteinInputMethod _proteinInputMethod = ProteinInputMethod.general; // 기본 일반가정식
   final _manualProteinController = TextEditingController();
   String? _selectedFoodType;
   final _foodAmountController = TextEditingController();
 
-  // Protein values per 100g
+  // 100g당 단백질(g)
   static const Map<String, int> _foodProteinValues = {
     '돼지고기': 17,
     '소고기': 15,
@@ -219,7 +227,7 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
   void initState() {
     super.initState();
     if (widget.initialData != null) {
-      // Initialize with existing data
+      // 편집 초기화
       _selectedDate = widget.initialData!.date;
       _selectedMealType = widget.initialData!.mealType;
       _mainDishController.text = widget.initialData!.mainDish;
@@ -228,7 +236,8 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
       }
       if (widget.initialData!.proteinGrams != null) {
         _proteinInputMethod = ProteinInputMethod.manual;
-        _manualProteinController.text = widget.initialData!.proteinGrams!.toString();
+        _manualProteinController.text =
+            widget.initialData!.proteinGrams!.toString();
       }
     } else {
       _selectedDate = DateTime.now();
@@ -269,13 +278,14 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
         }
         return 0;
       case ProteinInputMethod.general:
-        return 18;
+        return 18; // 기본값(일반가정식)
     }
   }
 
   Future<void> _submitForm() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_proteinInputMethod == ProteinInputMethod.food && _selectedFoodType == null) {
+    if (_proteinInputMethod == ProteinInputMethod.food &&
+        _selectedFoodType == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('음식 종류를 선택해주세요.')),
       );
@@ -288,13 +298,16 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
     final proteinGrams = _calculateProtein();
 
     final newDietData = {
-      if (widget.initialData != null) 'id': widget.initialData!.id, // Include ID for updates
-      'date': '${_selectedDate.year.toString().padLeft(4, '0')}-'
+      if (widget.initialData != null) 'id': widget.initialData!.id,
+      'date':
+      '${_selectedDate.year.toString().padLeft(4, '0')}-'
           '${_selectedDate.month.toString().padLeft(2, '0')}-'
           '${_selectedDate.day.toString().padLeft(2, '0')}',
       'mealType': _selectedMealType!,
       'mainDish': _mainDishController.text.trim(),
-      'subDish': _subDishController.text.trim().isEmpty ? null : _subDishController.text.trim(),
+      'subDish': _subDishController.text.trim().isEmpty
+          ? null
+          : _subDishController.text.trim(),
       'proteinGrams': proteinGrams,
     };
 
@@ -348,13 +361,23 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text(widget.initialData != null ? '식단 수정' : '새 식단 기록', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            Text(
+              widget.initialData != null ? '식단 수정' : '새 식단 기록',
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 20),
 
             Row(
               children: [
-                Expanded(child: Text('날짜: ${_selectedDate.year}.${_selectedDate.month}.${_selectedDate.day}')),
-                TextButton(onPressed: _presentDatePicker, child: const Text('날짜 변경')),
+                Expanded(
+                  child: Text(
+                    '날짜: ${_selectedDate.year}.${_selectedDate.month}.${_selectedDate.day}',
+                  ),
+                ),
+                TextButton(
+                  onPressed: _presentDatePicker,
+                  child: const Text('날짜 변경'),
+                ),
               ],
             ),
 
@@ -362,17 +385,20 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
               value: _selectedMealType,
               decoration: const InputDecoration(labelText: '식사 시간'),
               items: const ['아침', '점심', '저녁']
-                  .map((label) => DropdownMenuItem(value: label, child: Text(label)))
+                  .map((label) =>
+                  DropdownMenuItem(value: label, child: Text(label)))
                   .toList(),
               onChanged: (value) => setState(() => _selectedMealType = value),
-              validator: (value) => value == null ? '식사 시간을 선택해주세요.' : null,
+              validator: (value) =>
+              value == null ? '식사 시간을 선택해주세요.' : null,
             ),
             const SizedBox(height: 12),
 
             TextFormField(
               controller: _mainDishController,
               decoration: const InputDecoration(labelText: '메인 음식'),
-              validator: (value) => value!.trim().isEmpty ? '메인 음식을 입력해주세요.' : null,
+              validator: (value) =>
+              value!.trim().isEmpty ? '메인 음식을 입력해주세요.' : null,
             ),
             const SizedBox(height: 12),
 
@@ -382,22 +408,23 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
             ),
 
             const SizedBox(height: 20),
-            const Text('단백질 섭취량', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+            const Text('단백질 섭취량',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
             const SizedBox(height: 12),
 
             Column(
-              children: ProteinInputMethod.values.map((method) {
-                return RadioListTile<ProteinInputMethod>(
-                  title: Text(_getProteinMethodLabel(method)),
-                  value: method,
-                  groupValue: _proteinInputMethod,
-                  onChanged: (value) {
-                    if (value != null) {
-                      setState(() => _proteinInputMethod = value);
-                    }
-                  },
-                );
-              }).toList(),
+              children: ProteinInputMethod.values
+                  .map((method) => RadioListTile<ProteinInputMethod>(
+                title: Text(_getProteinMethodLabel(method)),
+                value: method,
+                groupValue: _proteinInputMethod,
+                onChanged: (value) {
+                  if (value != null) {
+                    setState(() => _proteinInputMethod = value);
+                  }
+                },
+              ))
+                  .toList(),
             ),
 
             const SizedBox(height: 12),
@@ -423,10 +450,13 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
                     value: _selectedFoodType,
                     decoration: const InputDecoration(labelText: '음식 종류'),
                     items: _foodProteinValues.keys
-                        .map((food) => DropdownMenuItem(value: food, child: Text(food)))
+                        .map((food) =>
+                        DropdownMenuItem(value: food, child: Text(food)))
                         .toList(),
-                    onChanged: (value) => setState(() => _selectedFoodType = value),
-                    validator: (value) => value == null ? '음식 종류를 선택해주세요.' : null,
+                    onChanged: (value) =>
+                        setState(() => _selectedFoodType = value),
+                    validator: (value) =>
+                    value == null ? '음식 종류를 선택해주세요.' : null,
                   ),
                   const SizedBox(height: 12),
                   TextFormField(
@@ -452,7 +482,8 @@ class _AddDietLogFormState extends State<AddDietLogForm> {
                 if (widget.initialData != null)
                   TextButton(
                     onPressed: _saving ? null : _deleteLog,
-                    child: const Text('삭제하기', style: TextStyle(color: Colors.red)),
+                    child:
+                    const Text('삭제하기', style: TextStyle(color: Colors.red)),
                   ),
                 const SizedBox(width: 12),
                 ElevatedButton(

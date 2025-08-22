@@ -25,6 +25,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // WebSocket 연결을 위한 엔드포인트 설정
         // 클라이언트는 이 URL로 WebSocket 연결을 시작합니다.
-        registry.addEndpoint("/ws").setAllowedOriginPatterns("*").withSockJS();
+        // 앱에서 사용하는 경로인 '/ws/sensor'로 수정했습니다.
+        registry.addEndpoint("/ws/sensor").setAllowedOriginPatterns("*");
     }
 }

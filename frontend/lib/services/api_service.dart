@@ -7,7 +7,7 @@ class ApiService {
   // ❗ 실기기: 서버의 공인IP/사설IP로 변경
   //  - 에뮬레이터(AVD): http://10.0.2.2:8080
   //  - 실기기와 서버가 서로 다른 와이파이여도, 서버가 외부에서 접근 가능(포트포워딩/공인IP/도메인)하면 연결 가능
-  static const String _baseUrl = 'http://192.168.0.107:8080'; // TODO: 환경에 맞게 수정
+  static const String _baseUrl = 'http://192.168.0.101:8080'; // TODO: 환경에 맞게 수정
 
   // ===== JWT 토큰 관리 =====
   static String? _jwt;
